@@ -1,7 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
+
 
 public enum State
 {
@@ -14,155 +16,174 @@ public enum State
 public class FSM : MonoBehaviour
 {
     public Transform player;
-    public State currentState;
     NavMeshAgent agent;
-    public float speed, detectionDistance, loseDistance;
+    public float runSpeed, walkSpeed, detectionDistance, loseDistance, maxDist;
+    public State state;
+    Animator anim;
+    bool isIdle;
 
-    // stores the medkit the NPC is going to
-    Transform targetMedpack;
-
-
+    // Start is called before the first frame update
     void Start()
     {
         agent = GetComponent<NavMeshAgent>();
+        anim = GetComponentInChildren<Animator>();
+        anim.SetBool("isGrounded", true);
+        isIdle = false;
+        
+        ChooseNewDestination();
     }
 
-
+    // Update is called once per frame
     void Update()
     {
-        agent.speed = speed;
 
-        switch (currentState)
+
+        Vector3 toPlayer = player.position - transform.position;
+        toPlayer = Vector3.Normalize(toPlayer);
+
+        int mask = 1 << LayerMask.NameToLayer("Navigation");
+
+        switch (state)
         {
+
             case State.patrol:
-                if(Vector3.Distance(agent.transform.position, agent.destination) < 3f)
+
+                if(!isIdle)
                 {
-                    ChooseDestination();
+                    anim.SetInteger("State", 1);
+                    agent.speed = walkSpeed;
+                    if (Vector3.Distance(agent.destination, transform.position) < 3f)
+                    {
+                        StartCoroutine(Idle());
+                        ChooseNewDestination();
+
+                    }
                 }
 
-                if(Vector3.Distance(player.position, transform.position) < detectionDistance)
+
+                Debug.Log(Vector3.Angle(toPlayer, transform.forward));
+                //player detection
+                if (Vector3.Distance(player.position, transform.position) < detectionDistance &&
+                    !Physics.Raycast(transform.position, toPlayer, detectionDistance, mask))
                 {
-                    currentState = State.chase;
+                    state = State.chase;
                 }
 
                 break;
-
-
             case State.chase:
+                anim.SetInteger("State", 2);
+                agent.speed = runSpeed;
                 agent.SetDestination(player.position);
 
-                if(Vector3.Distance(player.position, transform.position) > loseDistance)
+                if (Vector3.Distance(player.position, transform.position) > loseDistance ||
+                    Physics.Raycast(transform.position, toPlayer, detectionDistance, mask))
                 {
-                    currentState = State.patrol;
-                    ChooseDestination();
+                    state = State.patrol;
+                    ChooseNewDestination();  
                 }
 
+
                 break;
-
-
-            // The npc tries to reach a medkit, but runs away if the player gets too close
             case State.flee:
+                anim.SetInteger("State", 2);
+                agent.speed = runSpeed;
+                ChooseMedpack();
 
-                // find a medkit
-                if (targetMedpack == null)
-                {
-                    ChooseMedpack();
-                }
+                //Vector3 away = transform.position - player.position;
+                //away = away.normalized;
 
-                // Check how close the player is to the NPC
-                float playerDistance = Vector3.Distance(
-                    player.position,
-                    transform.position
-                );
+                //agent.SetDestination( transform.position + away * 8f );
 
-                // if the player is too close, run away
-                if (playerDistance < 5f)
-                {
-                    Vector3 away = transform.position - player.position;
-                    away = away.normalized;
-
-                    agent.SetDestination(
-                        transform.position + away * 5f
-                    );
-                }
-
-                // if the player is far enough away, continue toward the medkit
-                else if (targetMedpack != null)
-                {
-                    agent.SetDestination(targetMedpack.position);
-                }
 
                 break;
-
-
             case State.dead:
 
-                break;
 
+
+                break;
 
             default:
-                Debug.LogError($"Current state {currentState} doesn't exist");
+
+                Debug.LogError($"Current state {state} doesn't exist.");
                 break;
+
         }
+
+
     }
 
 
-    void ChooseDestination()
+    void ChooseNewDestination()
     {
         Vector3 targetPosition;
 
-        targetPosition = new Vector3(
-            Random.Range(-10f, 10f),
-            0,
-            Random.Range(-10f, 10f)
-        );
+        targetPosition = new Vector3(Random.Range(-50f, 10f), 0f, Random.Range(-10f, 10f));
 
         agent.SetDestination(targetPosition);
+
     }
 
 
     void ChooseMedpack()
     {
-        // find "Medpack" tag
-        GameObject[] medpacks = GameObject.FindGameObjectsWithTag("Medpack");
 
+        Vector3 targetPosition;
+
+        GameObject[] medPacks = GameObject.FindGameObjectsWithTag("Medpack");
         float maxDistance = 0f;
+        Vector3 furthest = Vector3.zero;
 
-        GameObject furthest = null;
-
-        // check every medkit
-        foreach (GameObject medpack in medpacks)
+        foreach (GameObject medPack in medPacks)
         {
-            // Calculate the distance from the player to the medkit
-            float distance = Vector3.Distance(
-                player.position,
-                medpack.transform.position
-            );
-
-            // If this medkit is further from the player, make it the new target
-            if (distance > maxDistance)
+            float dist = Vector3.Distance(player.position, medPack.transform.position);
+            if (dist > maxDistance && Vector3.Distance(transform.position, medPack.transform.position) < maxDist 
+                && Vector3.Angle(transform.position - player.position , transform.position - medPack.transform.position) >40f )
             {
-                maxDistance = distance;
-                furthest = medpack;
+                furthest = medPack.transform.position;
+                maxDistance = dist;
             }
-        }
 
-        // save the selected medkit
-        if (furthest != null)
-        {
-            targetMedpack = furthest.transform;
         }
+        Debug.Log("Furthest dist:" + Vector3.Angle(transform.position - player.position, transform.position - furthest) );
+        targetPosition = furthest;    
+
+        agent.SetDestination(targetPosition);
+
     }
+
+    IEnumerator Idle()
+    {
+        isIdle = true;
+        anim.SetInteger("State", 0);
+        agent.speed = 0;
+
+
+        float waitTime = Random.Range(0, 4f);
+
+        yield return new WaitForSeconds(waitTime);
+
+        isIdle = false;
+        yield return null;
+
+
+    }
+
+
 
     private void OnDrawGizmos()
     {
-        if (agent == null)
-            return;
+        Gizmos.color = Color.yellow;
+        if (agent != null)
+            Gizmos.DrawWireSphere(agent.destination, 2f);
 
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(agent.destination, 3f);
-
+        Gizmos.DrawWireSphere(transform.position, detectionDistance);
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, loseDistance);
+        
         Gizmos.color = Color.blue;
-        Gizmos.DrawWireSphere(transform.position, 3f);
+        Gizmos.DrawLine(transform.position, player.position);
+
     }
 }
+
