@@ -91,7 +91,7 @@ public class FSM : MonoBehaviour
                     }
                 }
 
-                Debug.Log(Vector3.Angle(toPlayer, transform.forward));
+                Vector3.Angle(toPlayer, transform.forward);
 
 
                 // Player detection
