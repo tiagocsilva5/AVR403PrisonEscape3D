@@ -44,20 +44,29 @@ public class PlayerCapture : MonoBehaviour
     public void Capture()
     {
         // Prevent repeated captures from overlapping NPC colliders.
-        if (HasLost || Time.unscaledTime < nextCaptureTime)
+        if (HasLost || GameScreens.BlocksGameplay || Time.unscaledTime < nextCaptureTime)
             return;
 
         nextCaptureTime = Time.unscaledTime + captureCooldown;
         CaptureCount++;
-
-        ReturnToCell();
 
         Debug.Log(
             $"Player caught: {CaptureCount}/{maximumCaptures}",
             this);
 
         if (CaptureCount >= maximumCaptures)
+        {
+            ReturnToCell();
             LoseGame();
+        }
+        else
+        {
+            GameScreens.Instance.ShowCaught(CaptureCount, maximumCaptures, () =>
+            {
+                ReturnToCell();
+                nextCaptureTime = Time.unscaledTime + captureCooldown;
+            });
+        }
     }
 
     private void ReturnToCell()
@@ -95,6 +104,10 @@ public class PlayerCapture : MonoBehaviour
 
         if (controllerWasEnabled)
             characterController.enabled = true;
+
+        PlayerController movement = GetComponent<PlayerController>();
+        if (movement != null)
+            movement.ResetForRespawn();
     }
 
     private void LoseGame()
@@ -110,8 +123,9 @@ public class PlayerCapture : MonoBehaviour
             }
         }
 
+        // The reusable screen replaces the old optional game-over panel.
         if (gameOverPanel != null)
-            gameOverPanel.SetActive(true);
+            gameOverPanel.SetActive(false);
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
@@ -120,6 +134,17 @@ public class PlayerCapture : MonoBehaviour
             Time.timeScale = 0f;
 
         Debug.Log("Game Over: caught three times.", this);
+        GameScreens.Instance.ShowGameOver(CaptureCount);
+        onGameOver.Invoke();
+    }
+
+    public void Die(string reason = "You did not make it out of the prison.")
+    {
+        if (HasLost || GameScreens.BlocksGameplay)
+            return;
+
+        HasLost = true;
+        GameScreens.Instance.ShowDeath(reason);
         onGameOver.Invoke();
     }
 }

@@ -38,6 +38,9 @@ public class CarController : MonoBehaviour
 
     private void Update()
     {
+        if (GameScreens.BlocksGameplay)
+            return;
+
         if (isDriving && Input.GetKeyDown(KeyCode.E))
             VehicleExit();
 

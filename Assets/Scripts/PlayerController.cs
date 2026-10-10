@@ -54,6 +54,9 @@ public class PlayerController: MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (GameScreens.BlocksGameplay || !controller.enabled)
+            return;
+
         Vector3 input = transform.forward * Input.GetAxisRaw("Vertical") +
                         transform.right * Input.GetAxisRaw("Horizontal");
 
@@ -191,6 +194,25 @@ public class PlayerController: MonoBehaviour
 
 
 
+    }
+
+    public void ResetForRespawn()
+    {
+        StopAllCoroutines();
+        verticalSpeed = 0f;
+        jumping = false;
+        stick = false;
+        platform = null;
+        lastPlatformPos = Vector3.zero;
+        targetLook = Vector3.zero;
+
+        if (animator != null)
+        {
+            animator.ResetTrigger("Jump");
+            animator.ResetTrigger("Falling");
+            animator.SetInteger("State", 0);
+            animator.SetBool("isGrounded", true);
+        }
     }
 
     private void OnDrawGizmos()

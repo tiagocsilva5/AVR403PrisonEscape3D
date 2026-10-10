@@ -17,6 +17,9 @@ public class CameraController : MonoBehaviour
 
     void LateUpdate()
     {
+        if (GameScreens.BlocksGameplay)
+            return;
+
         // Zoom input
         targetDistance = Mathf.Clamp(
             targetDistance - Input.GetAxis("Mouse ScrollWheel") * zoomSensitivity * Time.deltaTime,
